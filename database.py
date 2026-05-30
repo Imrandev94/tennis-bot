@@ -17,7 +17,6 @@ def get_connection():
 
 
 def init_db():
-    """Initialise les tables si elles n'existent pas encore."""
     with get_connection() as conn:
         conn.executescript("""
         CREATE TABLE IF NOT EXISTS users (
@@ -35,8 +34,8 @@ def init_db():
             player1         TEXT NOT NULL,
             player2         TEXT NOT NULL,
             scheduled_at    TEXT,
-            status          TEXT DEFAULT 'upcoming',  -- upcoming | live | finished
-            winner          TEXT,                      -- player1 | player2 | NULL
+            status          TEXT DEFAULT 'upcoming',
+            winner          TEXT,
             score           TEXT,
             surface         TEXT DEFAULT 'Clay',
             created_at      TEXT DEFAULT (datetime('now'))
@@ -46,9 +45,9 @@ def init_db():
             bet_id      INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id     INTEGER NOT NULL REFERENCES users(user_id),
             match_id    TEXT    NOT NULL REFERENCES matches(match_id),
-            prediction  TEXT    NOT NULL,   -- player1 | player2
+            prediction  TEXT    NOT NULL,
             amount      INTEGER NOT NULL,
-            status      TEXT DEFAULT 'pending',  -- pending | won | lost | cancelled
+            status      TEXT DEFAULT 'pending',
             placed_at   TEXT DEFAULT (datetime('now')),
             resolved_at TEXT,
             UNIQUE(user_id, match_id)
@@ -128,32 +127,24 @@ def upsert_match(match_id, tournament, round_, player1, player2,
               scheduled_at, status, surface))
 
 
-def get_today_matches(tournament_filter: str = None):
-    today = date.today().isoformat()
+def get_open_matches():
+    """
+    Retourne uniquement les matchs dont l'heure n'est pas encore passée
+    et dont le statut est 'upcoming'.
+    """
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     with get_connection() as conn:
-        if tournament_filter:
-            return conn.execute("""
-                SELECT * FROM matches
-                WHERE date(scheduled_at) = ?
-                  AND status IN ('upcoming','live')
-                  AND tournament LIKE ?
-                ORDER BY scheduled_at
-            """, (today, f"%{tournament_filter}%")).fetchall()
         return conn.execute("""
             SELECT * FROM matches
-            WHERE date(scheduled_at) = ?
-              AND status IN ('upcoming','live')
+            WHERE status = 'upcoming'
+              AND scheduled_at > ?
             ORDER BY scheduled_at
-        """, (today,)).fetchall()
+        """, (now,)).fetchall()
 
 
 def get_all_open_matches():
-    with get_connection() as conn:
-        return conn.execute("""
-            SELECT * FROM matches
-            WHERE status IN ('upcoming','live')
-            ORDER BY scheduled_at
-        """).fetchall()
+    """Alias pour compatibilité — retourne les matchs encore ouverts."""
+    return get_open_matches()
 
 
 def get_match(match_id: str):
@@ -164,7 +155,6 @@ def get_match(match_id: str):
 
 
 def resolve_match(match_id: str, winner: str, score: str = ""):
-    """Clôt un match et règle tous les paris associés."""
     with get_connection() as conn:
         conn.execute("""
             UPDATE matches SET status = 'finished', winner = ?, score = ?
@@ -179,7 +169,7 @@ def resolve_match(match_id: str, winner: str, score: str = ""):
     results = []
     for bet in bets:
         if bet["prediction"] == winner:
-            gain = bet["amount"] * 2   # cote fixe x2 pour simplifier
+            gain = bet["amount"] * 2
             update_points(bet["user_id"], gain,
                           f"Pari gagné sur match {match_id}")
             with get_connection() as conn:
@@ -204,19 +194,23 @@ def resolve_match(match_id: str, winner: str, score: str = ""):
 # ─── BETS ─────────────────────────────────────────────────────────────────────
 
 def place_bet(user_id: int, match_id: str, prediction: str, amount: int):
-    """
-    Tente de placer un pari. Retourne (True, bet_id) ou (False, raison).
-    """
     user = get_user(user_id)
     if not user:
         return False, "Utilisateur introuvable."
     if user["points"] < amount:
         return False, f"Solde insuffisant ({user['points']} pts)."
+
     match = get_match(match_id)
     if not match:
         return False, "Match introuvable."
     if match["status"] != "upcoming":
         return False, "Ce match n'accepte plus de paris (déjà commencé ou terminé)."
+
+    # Vérification de l'heure : bloquer si le match a déjà commencé
+    if match["scheduled_at"]:
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        if match["scheduled_at"] <= now:
+            return False, "❌ Les paris sont fermés, ce match a déjà commencé !"
 
     with get_connection() as conn:
         existing = conn.execute(
