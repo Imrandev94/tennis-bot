@@ -74,7 +74,7 @@ def get_main_keyboard():
         [KeyboardButton("🏆 CLASSEMENT"), KeyboardButton("📊 STATS")],
         [KeyboardButton("💰 SOLDE"), KeyboardButton("📋 MES PARIS")],
     ]
-    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, persistent=True)
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, is_persistent=True)
 
 
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
