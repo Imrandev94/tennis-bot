@@ -1,12 +1,5 @@
 """
 tennis_api.py — Récupération des matchs de tennis du jour
-Utilise l'API gratuite api-tennis.com (ou fallback manuel).
-
-Pour obtenir une clé gratuite : https://rapidapi.com/sportcontentapi/api/tennis-live-data
-ou https://www.api-tennis.com/
-
-Variables d'environnement :
-  TENNIS_API_KEY  — clé API (optionnel, active le mode live)
 """
 
 import os
@@ -18,8 +11,6 @@ from database import upsert_match
 
 API_KEY = os.getenv("TENNIS_API_KEY", "")
 
-# ─── Données de démonstration (utilisées si pas de clé API) ───────────────────
-
 DEMO_MATCHES = [
     {
         "match_id": "rg2026_001",
@@ -27,7 +18,7 @@ DEMO_MATCHES = [
         "round": "3ème tour",
         "player1": "C. Alcaraz",
         "player2": "H. Hurkacz",
-        "scheduled_at": f"{date.today().isoformat()} 11:00:00",
+        "scheduled_at": f"{date.today().isoformat()} 23:00:00",
         "surface": "Clay",
     },
     {
@@ -36,51 +27,20 @@ DEMO_MATCHES = [
         "round": "3ème tour",
         "player1": "I. Swiatek",
         "player2": "E. Rybakina",
-        "scheduled_at": f"{date.today().isoformat()} 13:00:00",
-        "surface": "Clay",
-    },
-    {
-        "match_id": "rg2026_003",
-        "tournament": "Roland Garros 2026",
-        "round": "3ème tour",
-        "player1": "J. Sinner",
-        "player2": "A. de Minaur",
-        "scheduled_at": f"{date.today().isoformat()} 15:00:00",
-        "surface": "Clay",
-    },
-    {
-        "match_id": "rg2026_004",
-        "tournament": "Roland Garros 2026",
-        "round": "3ème tour",
-        "player1": "A. Zverev",
-        "player2": "T. Paul",
-        "scheduled_at": f"{date.today().isoformat()} 17:00:00",
-        "surface": "Clay",
-    },
-    {
-        "match_id": "rg2026_005",
-        "tournament": "Roland Garros 2026",
-        "round": "3ème tour",
-        "player1": "C. Gauff",
-        "player2": "M. Andreeva",
-        "scheduled_at": f"{date.today().isoformat()} 19:00:00",
+        "scheduled_at": f"{date.today().isoformat()} 23:30:00",
         "surface": "Clay",
     },
 ]
 
 
 def _fetch_from_api() -> list[dict]:
-    """
-    Tente de récupérer les matchs via RapidAPI / api-tennis.com.
-    Retourne une liste normalisée ou [] en cas d'échec.
-    """
     if not API_KEY:
         return []
 
     today = date.today().isoformat()
     url = (
         "https://api-tennis.p.rapidapi.com/matches"
-        f"?date={today}&tournament_id=2"   # 2 = Roland Garros
+        f"?date={today}&tournament_id=2"
     )
     req = urllib.request.Request(
         url,
@@ -111,10 +71,6 @@ def _fetch_from_api() -> list[dict]:
 
 
 def refresh_matches() -> list[dict]:
-    """
-    Récupère les matchs du jour, les insère en base et retourne la liste.
-    Utilise les données de démo si aucune clé API n'est configurée.
-    """
     matches = _fetch_from_api()
 
     if not matches:
@@ -150,11 +106,14 @@ def format_match_for_display(match) -> str:
         match["status"], "❓"
     )
 
+    surface = match["surface"] if match["surface"] else "Clay"
+    score = match["score"] if match["score"] else ""
+
     line = (
         f"{status_emoji} *{match['player1']}* vs *{match['player2']}*\n"
         f"   🏆 {match['tournament']} — {match['round']}\n"
-        f"   🕐 {time_str}   🎾 {match.get('surface','Clay')}"
+        f"   🕐 {time_str}   🎾 {surface}"
     )
-    if match["status"] == "finished" and match.get("score"):
-        line += f"\n   📊 Score : {match['score']}"
+    if match["status"] == "finished" and score:
+        line += f"\n   📊 Score : {score}"
     return line
