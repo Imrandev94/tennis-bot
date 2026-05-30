@@ -550,7 +550,9 @@ def main():
     app.add_handler(bet_conv)
     app.add_handler(CallbackQueryHandler(inline_callback))
 
+    import asyncio
     print("🤖 Bot démarré ! Ctrl+C pour arrêter.")
+    asyncio.set_event_loop(asyncio.new_event_loop())
     app.run_polling(drop_pending_updates=True)
 
 
