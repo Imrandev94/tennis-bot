@@ -11,27 +11,7 @@ from database import upsert_match
 
 API_KEY = os.getenv("TENNIS_API_KEY", "")
 
-DEMO_MATCHES = [
-    {
-        "match_id": "rg2026_001",
-        "tournament": "Roland Garros 2026",
-        "round": "3ème tour",
-        "player1": "C. Alcaraz",
-        "player2": "H. Hurkacz",
-        "scheduled_at": f"{date.today().isoformat()} 23:00:00",
-        "surface": "Clay",
-    },
-    {
-        "match_id": "rg2026_002",
-        "tournament": "Roland Garros 2026",
-        "round": "3ème tour",
-        "player1": "I. Swiatek",
-        "player2": "E. Rybakina",
-        "scheduled_at": f"{date.today().isoformat()} 23:30:00",
-        "surface": "Clay",
-    },
-]
-
+DEMO_MATCHES = []
 
 def _fetch_from_api() -> list[dict]:
     if not API_KEY:
