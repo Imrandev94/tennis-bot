@@ -37,7 +37,7 @@ def init_db():
             status          TEXT DEFAULT 'upcoming',
             winner          TEXT,
             score           TEXT,
-            surface         TEXT DEFAULT 'Clay',
+            surface         TEXT DEFAULT 'Terre battue',
             created_at      TEXT DEFAULT (datetime('now'))
         );
 
@@ -114,7 +114,7 @@ def get_leaderboard(limit: int = 10):
 # ─── MATCHES ──────────────────────────────────────────────────────────────────
 
 def upsert_match(match_id, tournament, round_, player1, player2,
-                 scheduled_at=None, status="upcoming", surface="Clay"):
+                 scheduled_at=None, status="upcoming", surface="Terre battue"):
     with get_connection() as conn:
         conn.execute("""
             INSERT INTO matches (match_id, tournament, round, player1, player2,
@@ -122,7 +122,8 @@ def upsert_match(match_id, tournament, round_, player1, player2,
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(match_id) DO UPDATE SET
                 status       = excluded.status,
-                scheduled_at = excluded.scheduled_at
+                scheduled_at = excluded.scheduled_at,
+                surface      = excluded.surface
         """, (match_id, tournament, round_, player1, player2,
               scheduled_at, status, surface))
 

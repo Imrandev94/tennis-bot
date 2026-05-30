@@ -402,16 +402,22 @@ async def cmd_addmatch(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     try:
-        args = " ".join(context.args).split("|")
-        match_id, tournament, round_, p1, p2, dt = [a.strip() for a in args]
-        db.upsert_match(match_id, tournament, round_, p1, p2, dt + ":00")
+        args = [a.strip() for a in " ".join(context.args).split("|")]
+        if len(args) == 7:
+            match_id, tournament, round_, p1, p2, dt, surface = args
+        elif len(args) == 6:
+            match_id, tournament, round_, p1, p2, dt = args
+            surface = "Terre battue"
+        else:
+            raise ValueError("Nombre de champs incorrect")
+        db.upsert_match(match_id, tournament, round_, p1, p2, dt + ":00", surface=surface)
         await update.message.reply_text(
             f"✅ Match ajouté : *{p1}* vs *{p2}*", parse_mode=ParseMode.MARKDOWN
         )
     except Exception:
         await update.message.reply_text(
             "⚠️ Format incorrect.\nUsage :\n"
-            "`/addmatch id|Tournoi|Tour|Joueur1|Joueur2|2026-05-30 14:00`",
+            "`/addmatch id|Tournoi|Tour|Joueur1|Joueur2|2026-05-30 14:00|Terre battue`",
             parse_mode=ParseMode.MARKDOWN
         )
 
@@ -439,8 +445,14 @@ async def cmd_addmatchs(update: Update, context: ContextTypes.DEFAULT_TYPE):
         m = m.strip()
         try:
             args = [a.strip() for a in m.split("|")]
-            match_id, tournament, round_, p1, p2, dt = args
-            db.upsert_match(match_id, tournament, round_, p1, p2, dt + ":00")
+            if len(args) == 7:
+                match_id, tournament, round_, p1, p2, dt, surface = args
+            elif len(args) == 6:
+                match_id, tournament, round_, p1, p2, dt = args
+                surface = "Terre battue"
+            else:
+                raise ValueError("Nombre de champs incorrect")
+            db.upsert_match(match_id, tournament, round_, p1, p2, dt + ":00", surface=surface)
             ajouts.append(f"✅ {p1} vs {p2}")
         except Exception:
             erreurs.append(f"❌ Erreur : `{m}`")
