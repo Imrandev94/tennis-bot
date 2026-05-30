@@ -502,14 +502,18 @@ async def inline_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = query.data
 
     if data == "show_matches":
-        # Simule la commande /matchs
-        update.message = query.message
-        await cmd_matchs(update, context)
+        matches = db.get_all_open_matches()
+        if not matches:
+            await query.message.reply_text("😴 Aucun match disponible.")
+            return
+        lines = ["🎾 *Matchs disponibles pour parier :*\n"]
+        for i, m in enumerate(matches, 1):
+            lines.append(f"*{i}.* {api.format_match_for_display(m)}\n")
+        lines.append("\n_Utilise /parier pour placer un pari !_")
+        await query.message.reply_text("\n".join(lines), parse_mode=ParseMode.MARKDOWN)
     elif data == "leaderboard":
-        update.message = query.message
         await cmd_classement(update, context)
     elif data == "my_stats":
-        update.message = query.message
         await cmd_stats(update, context)
 
 

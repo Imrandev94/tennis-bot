@@ -152,7 +152,7 @@ def format_match_for_display(match) -> str:
 
     line = (
         f"{status_emoji} *{match['player1']}* vs *{match['player2']}*\n"
-        f"   🏆 {match['tournament']} — {match.get('round','')}\n"
+        f"   🏆 {match['tournament']} — {match['round']}\n"
         f"   🕐 {time_str}   🎾 {match.get('surface','Clay')}"
     )
     if match["status"] == "finished" and match.get("score"):
