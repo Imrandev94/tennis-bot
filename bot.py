@@ -15,7 +15,7 @@ import logging
 from datetime import datetime
 from telegram import (
     Update, InlineKeyboardButton, InlineKeyboardMarkup,
-    BotCommand
+    BotCommand, ReplyKeyboardMarkup, KeyboardButton
 )
 from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler,
@@ -66,28 +66,49 @@ async def register(update: Update):
 
 # ─── /start ───────────────────────────────────────────────────────────────────
 
+def get_main_keyboard():
+    """Retourne le clavier persistant principal."""
+    keyboard = [
+        [KeyboardButton("🎾 MATCHS")],
+        [KeyboardButton("🎯 PARIS"), KeyboardButton("👤 PROFIL")],
+        [KeyboardButton("🏆 CLASSEMENT"), KeyboardButton("📊 STATS")],
+        [KeyboardButton("💰 SOLDE"), KeyboardButton("📋 MES PARIS")],
+    ]
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, persistent=True)
+
+
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await register(update)
     user = db.get_user(update.effective_user.id)
+    stats = db.get_user_stats(update.effective_user.id)
+    rows = db.get_leaderboard(100)
+    open_matches = db.get_all_open_matches()
+
+    # Calcul classement
+    rank = next((i+1 for i, r in enumerate(rows) if r["user_id"] == update.effective_user.id), "?")
+
+    # Calcul winrate
+    wins = stats["wins"] or 0
+    total = (stats["wins"] or 0) + (stats["losses"] or 0)
+    winrate = round(wins / total * 100) if total > 0 else 0
+
+    first_name = update.effective_user.first_name or "Champion"
+
     text = (
-        "🎾 *Bienvenue sur TennisBet !*\n\n"
-        f"Tu démarres avec *{user['points']} points* virtuels.\n\n"
-        "📌 *Commandes disponibles :*\n"
-        "• /matchs — Voir les matchs du jour\n"
-        "• /parier — Placer un pari\n"
-        "• /mesparis — Mes paris en cours & historique\n"
-        "• /stats — Mes statistiques personnelles\n"
-        "• /classement — Leaderboard de la communauté\n"
-        "• /solde — Mon solde de points\n\n"
-        "_Les points sont virtuels, personne ne gagne ni ne perd d'argent réel !_ 🎲"
+        f"🏆 *TENNISBET*\n"
+        f"_Roland Garros 2026_ 🎾\n\n"
+        f"☀️ Bonjour *{first_name}* !\n\n"
+        f"💎 Solde · 💰 *{user['points']} pts*\n"
+        f"✅ *{wins}* paris gagnés · 🎯 *{winrate}%*\n\n"
+        f"🟢 *{len(open_matches)}* match(s) disponible(s) — va parier !\n"
+        f"🏅 Classement : *#{rank}*\n\n"
+        f"_Les points sont virtuels — aucun argent réel !_ 🎲"
     )
-    kb = InlineKeyboardMarkup([
-        [InlineKeyboardButton("📋 Voir les matchs", callback_data="show_matches"),
-         InlineKeyboardButton("🎰 Parier", callback_data="start_bet")],
-        [InlineKeyboardButton("🏆 Classement", callback_data="leaderboard"),
-         InlineKeyboardButton("📊 Mes stats", callback_data="my_stats")],
-    ])
-    await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=kb)
+    await update.message.reply_text(
+        text,
+        parse_mode=ParseMode.MARKDOWN,
+        reply_markup=get_main_keyboard()
+    )
 
 
 # ─── /matchs ──────────────────────────────────────────────────────────────────
@@ -535,6 +556,29 @@ async def cmd_refresh(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
+
+# ─── Gestion des boutons du clavier persistant ────────────────────────────────
+
+async def handle_keyboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await register(update)
+    text = update.message.text
+
+    if text == "🎾 MATCHS":
+        await cmd_matchs(update, context)
+    elif text == "🎯 PARIS":
+        await cmd_parier(update, context)
+        return
+    elif text == "👤 PROFIL":
+        await cmd_stats(update, context)
+    elif text == "🏆 CLASSEMENT":
+        await cmd_classement(update, context)
+    elif text == "📊 STATS":
+        await cmd_stats(update, context)
+    elif text == "💰 SOLDE":
+        await cmd_solde(update, context)
+    elif text == "📋 MES PARIS":
+        await cmd_mesparis(update, context)
+
 # ─── Callbacks inline (boutons du /start) ─────────────────────────────────────
 
 async def inline_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -594,6 +638,9 @@ def main():
     app.add_handler(CommandHandler("refresh", cmd_refresh))
     app.add_handler(bet_conv)
     app.add_handler(CallbackQueryHandler(inline_callback))
+    app.add_handler(MessageHandler(
+        filters.TEXT & ~filters.COMMAND, handle_keyboard
+    ))
 
     import asyncio
     print("🤖 Bot démarré ! Ctrl+C pour arrêter.")
