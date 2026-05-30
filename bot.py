@@ -54,7 +54,6 @@ def medal(rank: int) -> str:
 
 
 def safe_name(row) -> str:
-    """Retourne le nom d'affichage d'un utilisateur."""
     if row["username"]:
         return f"@{row['username']}"
     return row["first_name"] or f"User{row['user_id']}"
@@ -154,7 +153,6 @@ async def choose_match(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data[BET_DATA_KEY]["match_id"] = match_id
     context.user_data[BET_DATA_KEY]["match"] = dict(match)
 
-    # Infos paris communauté
     counts = db.get_match_bets_count(match_id)
     p1_pct = p2_pct = 50
     total_bets = (counts["p1_bets"] or 0) + (counts["p2_bets"] or 0)
@@ -164,7 +162,7 @@ async def choose_match(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     text = (
         f"🎾 *{match['player1']}* vs *{match['player2']}*\n"
-        f"🏆 {match['tournament']} — {match.get('round','')}\n\n"
+        f"🏆 {match['tournament']} — {match['round']}\n\n"
         f"📊 Paris communauté : "
         f"{match['player1']} {p1_pct}% — {p2_pct}% {match['player2']}\n\n"
         "*Sur qui tu mises ?*"
@@ -331,7 +329,6 @@ async def cmd_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     losses = stats["losses"] or 0
     winrate = round(wins / (wins + losses) * 100) if (wins + losses) > 0 else 0
 
-    # Barre de progression winrate
     filled = round(winrate / 10)
     bar = "🟩" * filled + "⬜" * (10 - filled)
 
@@ -404,7 +401,6 @@ async def cmd_addmatch(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("⛔ Commande réservée aux admins.")
         return
 
-    # Usage : /addmatch match_id|Tournoi|Tour|Joueur1|Joueur2|YYYY-MM-DD HH:MM
     try:
         args = " ".join(context.args).split("|")
         match_id, tournament, round_, p1, p2, dt = [a.strip() for a in args]
@@ -412,13 +408,48 @@ async def cmd_addmatch(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
             f"✅ Match ajouté : *{p1}* vs *{p2}*", parse_mode=ParseMode.MARKDOWN
         )
-    except Exception as e:
+    except Exception:
         await update.message.reply_text(
-            f"⚠️ Format incorrect.\n"
-            "Usage :\n"
+            "⚠️ Format incorrect.\nUsage :\n"
             "`/addmatch id|Tournoi|Tour|Joueur1|Joueur2|2026-05-30 14:00`",
             parse_mode=ParseMode.MARKDOWN
         )
+
+
+# ─── ADMIN : /addmatchs (plusieurs matchs d'un coup) ─────────────────────────
+
+async def cmd_addmatchs(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id):
+        await update.message.reply_text("⛔ Commande réservée aux admins.")
+        return
+
+    if not context.args:
+        await update.message.reply_text(
+            "Usage :\n`/addmatchs id|Tournoi|Tour|J1|J2|Date ; id|Tournoi|Tour|J1|J2|Date`\n\nSépare chaque match par ` ; `",
+            parse_mode=ParseMode.MARKDOWN
+        )
+        return
+
+    texte = " ".join(context.args)
+    matchs = texte.split(";")
+    ajouts = []
+    erreurs = []
+
+    for m in matchs:
+        m = m.strip()
+        try:
+            args = [a.strip() for a in m.split("|")]
+            match_id, tournament, round_, p1, p2, dt = args
+            db.upsert_match(match_id, tournament, round_, p1, p2, dt + ":00")
+            ajouts.append(f"✅ {p1} vs {p2}")
+        except Exception:
+            erreurs.append(f"❌ Erreur : `{m}`")
+
+    reponse = f"*{len(ajouts)} match(es) ajouté(s) :*\n" + "\n".join(ajouts)
+    if erreurs:
+        reponse += "\n\n*Erreurs :*\n" + "\n".join(erreurs)
+
+    await update.message.reply_text(reponse, parse_mode=ParseMode.MARKDOWN)
 
 
 # ─── ADMIN : /resoudre ────────────────────────────────────────────────────────
@@ -428,7 +459,6 @@ async def cmd_resoudre(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("⛔ Commande réservée aux admins.")
         return
 
-    # Usage : /resoudre match_id player1|player2 [6-3 7-5]
     if len(context.args) < 2:
         await update.message.reply_text(
             "Usage : `/resoudre <match_id> <player1|player2> [score]`",
@@ -437,7 +467,7 @@ async def cmd_resoudre(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     match_id = context.args[0]
-    winner = context.args[1]  # "player1" ou "player2"
+    winner = context.args[1]
     score = " ".join(context.args[2:]) if len(context.args) > 2 else ""
 
     match = db.get_match(match_id)
@@ -459,7 +489,6 @@ async def cmd_resoudre(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN)
 
-    # Notifier les parieurs
     for user_id, status, gain in results:
         try:
             if status == "won":
@@ -479,7 +508,7 @@ async def cmd_resoudre(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 chat_id=user_id, text=msg, parse_mode=ParseMode.MARKDOWN
             )
         except Exception:
-            pass  # L'utilisateur a peut-être bloqué le bot
+            pass
 
 
 # ─── ADMIN : /refresh ─────────────────────────────────────────────────────────
@@ -521,11 +550,10 @@ async def inline_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def main():
     db.init_db()
-    api.refresh_matches()   # Charge les matchs du jour au démarrage
+    api.refresh_matches()
 
     app = Application.builder().token(BOT_TOKEN).build()
 
-    # ConversationHandler pour /parier
     bet_conv = ConversationHandler(
         entry_points=[
             CommandHandler("parier", cmd_parier),
@@ -549,6 +577,7 @@ def main():
     app.add_handler(CommandHandler("classement", cmd_classement))
     app.add_handler(CommandHandler("solde", cmd_solde))
     app.add_handler(CommandHandler("addmatch", cmd_addmatch))
+    app.add_handler(CommandHandler("addmatchs", cmd_addmatchs))
     app.add_handler(CommandHandler("resoudre", cmd_resoudre))
     app.add_handler(CommandHandler("refresh", cmd_refresh))
     app.add_handler(bet_conv)
